@@ -1,0 +1,98 @@
+# Sentences starting with # and empty lines are ignored.
+# Commands starting with ! are expected to fail.
+
+# Valid one letter commands
+w
+a
+s
+d
+q
+
+# Valid value assignments
+A12=23
+BB23=D1
+# Valid arithmetic exressions
+# +
+AA99=D88+A8
+AA99=53+93
+AA99=D88+93
+AA99=53+A8
+# -
+AA99=D88-A8
+AA99=53-93
+AA99=D88-93
+AA99=53-A8
+# *
+AA99=D88*A8
+AA99=53*93
+AA99=D88*93
+AA99=53*A8
+# /
+AA99=D88/A8
+AA99=53/93
+AA99=D88/93
+AA99=53/A8
+
+# Valid Functions
+AA99=MIN(A1:D89)
+AA99=MAX(A1:D89)
+AA99=AVG(A1:D89)
+AA99=SUM(A1:D89)
+AA99=STDEV(A1:D89)
+AA99=SLEEP(D89)
+AA99=SLEEP(93)
+
+# Valid display commands
+disable_output
+enable_output
+scroll_to B34
+
+# Valid negetive inputs
+YYY888=-2345702
+YYY888=-23425*BB243
+YYY888=23425*-243
+YYY888=-23425*-243
+YYY888=ABC425*-243
+
+#Testing
+
+#Target Testing
+!Z
+!ZZZ
+!asdfadf
+!wa
+!qa
+!e
+!disable_outputoo
+!enable_outputoo
+!scroll_tolalaland
+!zD9
+!ZZZZ235
+!A4355
+!232
+!Z4A space should give error
+
+!Z0=5
+!Z005=5
+!Z0005=5
+Z20=5
+Z21=5
+AX5=5
+!AX012=5
+AY12=5
+A12=5
+!A1=5k
+
+#scroll_to Test
+scroll_to B6
+scroll_to AY20
+scroll_to AX20
+!scroll_to AX0020
+scroll_to AX25
+
+
+scroll_toAX25
+!scroll_to AX200=
+!scroll_to AX2000
+
+!A1=1234712937492332453543252499997

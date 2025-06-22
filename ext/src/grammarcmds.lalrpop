@@ -1,0 +1,134 @@
+use crate::tokenscmds::{Token, LexicalError};
+use crate::ast::*;
+use crate::SheetStorage;
+use lalrpop_util::ParseError;
+grammar(curr_sheet: u32, sheetstore: &SheetStorage);
+
+
+extern {
+  type Location = usize;
+  type Error = LexicalError;
+
+  enum Token {
+    
+    "Ws" => Token::Ws,
+
+    "float" => Token::Float(<f64>),
+    "int" => Token::Integer(<i32>),
+    "bool" => Token::Bool(<bool>),
+    "str" => Token::Str(<String>),
+    "wildcard" => Token::Wildcard,
+
+    "localcell" => Token::LocalCell(<(u32, u32)>),
+    "globalcell" => Token::GlobalCell(<(String, u32, u32)>),
+
+    "MoveUp" => Token::MoveUp,
+    "MoveLeft" => Token::MoveLeft,
+    "MovoDown" => Token::MoveDown,
+    "MoveRight" => Token::MoveRight,
+    "Quit" => Token::Quit,
+
+    "EnableOut" => Token::EnableOut,
+    "DisableOut" => Token::DisableOut,
+    "ScrollTo" => Token::ScrollTo,
+
+    "LoadCsv" => Token::LoadCsv,
+    "ExportCsv" => Token::ExportCsv,
+    "Resize" => Token::Resize,
+
+    "AddSheet" => Token::AddSheet,
+    "RemoveSheet" => Token::RemoveSheet,
+    "RenameSheet" => Token::RenameSheet,
+    "DuplicateSheet" => Token::DuplicateSheet,
+    "AutofillAp" => Token::AutofillAp,
+    "AutofillGp" => Token::AutofillGp,
+    "Undo" => Token::Undo,
+    "Redo" => Token::Redo,
+    "CopyCellValue" => Token::CopyCellValue,
+    "CopyCellFormula" => Token::CopyCellFormula,
+    "CopyRangeValues" => Token::CopyRangeValues,
+    "CopyRangeFormulas" => Token::CopyRangeFormulas,
+    "MakeChart" => Token::MakeChart,
+
+    ":" => Token::Colon
+  }
+}
+
+pub Command: (Command, Vec<ParentType>) = {
+    <c_v: DisplayCommand> => {
+        let (c, v) = c_v;
+        (Command::DisplayCmd(c), v)},
+    <c_v: OtherCommand> => {
+        let (c, v) = c_v;
+        (Command::OtherCmd(c), v)},
+    "Quit" => (Command::Quit, vec![]),
+}
+
+
+Addr: Addr = {
+    <cr: "localcell"> => { 
+        let (col, row) = cr;
+        Addr{sheet: curr_sheet, col, row} },  //NOTE: Why am I doing Box::new everywhere?. Also, how come tokens returns Option<_> but stufff is working?!?
+    <scr: "globalcell"> =>? { 
+        let (sheet, col, row) = scr;
+        let sheet_num_opt = sheetstore.num_from_name(&sheet);
+        if let Some(sheet_num) = sheet_num_opt {
+            Ok(Addr{sheet: sheet_num as u32, col, row}) 
+        }
+        else { Err(ParseError::User {error: LexicalError::SheetNotFoundErr(sheet) }) }
+    }
+}
+
+
+DisplayCommand: (DisplayCommand, Vec<ParentType>) = {
+    "EnableOut" => (DisplayCommand::EnableOut, vec![]),
+    "DisableOut" => (DisplayCommand::DisableOut, vec![]),
+    "ScrollTo" Ws <a: Addr> => (DisplayCommand::ScrollTo(a.clone()), vec![ParentType::Single(a)]), // NOTE: This means that scroll_toA45 will also work (space is not enforced) ("scroll_to    AAA3" will(should?) also work, vec![]))
+    "MoveUp" => (DisplayCommand::MoveUp, vec![]),
+    "MoveLeft" => (DisplayCommand::MoveLeft, vec![]),
+    "MovoDown" => (DisplayCommand::MoveDown, vec![]),
+    "MoveRight" => (DisplayCommand::MoveRight, vec![]),
+} 
+
+OtherCommand: (OtherCommand, Vec<ParentType>) = {
+    "LoadCsv" Ws <s1: "str"> Ws <s2: "str">=> (OtherCommand::LoadCsv(s1, Some(s2)), vec![]),
+    "LoadCsv" Ws <s: "str"> => (OtherCommand::LoadCsv(s, None), vec![]),
+    "ExportCsv" Ws <s: "str"> => (OtherCommand::ExportCsv(s), vec![]),
+    "Resize" Ws <s: "str"> Ws <c: "int"> Ws <r: "int"> => (OtherCommand::Resize(s, c.try_into().unwrap(), r.try_into().unwrap()), vec![]),
+
+    "AddSheet" Ws <s: "str"> Ws <c: "int"> Ws <r: "int">=> (OtherCommand::AddSheet(s, c.try_into().unwrap(), r.try_into().unwrap()), vec![]),
+    "RemoveSheet" Ws <s1: "str"> => (OtherCommand::RemoveSheet(s1), vec![]),
+    "RenameSheet" Ws <s1: "str"> Ws <s2: "str"> => (OtherCommand::RenameSheet(s1, s2), vec![]),
+    "DuplicateSheet" Ws <s1: "str"> Ws <s2: "str"> => (OtherCommand::DuplicateSheet(s1, Some(s2)), vec![]),
+    "DuplicateSheet" Ws <s1: "str"> => (OtherCommand::DuplicateSheet(s1, None), vec![]),
+    "AutofillAp" Ws <s: Addr> ":" <e: Addr> => (OtherCommand::AutofillAp(s.clone(), e.clone()), vec![ParentType::Range(s, e)]),
+    "AutofillGp" Ws <s: Addr> ":" <e: Addr> => (OtherCommand::AutofillGp(s.clone(), e.clone()), vec![ParentType::Range(s, e)]),
+    "Undo" => (OtherCommand::Undo, vec![]),
+    "Redo" => (OtherCommand::Redo, vec![]),
+    "CopyCellValue" Ws <s: Addr> Ws <e: Addr> => (OtherCommand::CopyCellVals(s.clone(), e.clone()), vec![ParentType::Single(s), ParentType::Single(e)]),
+    "CopyCellFormula" Ws <s: Addr> Ws <e: Addr> => (OtherCommand::CopyCellFormulae(s.clone(), e.clone()), vec![ParentType::Single(s), ParentType::Single(e)]),
+    "CopyRangeValues" Ws <s1: Addr> ":" <e1: Addr> Ws <s2: Addr> => 
+    {
+        let row_diff = e1.row - s1.row;
+        let col_diff = e1.col - s1.col;
+        let e2 = Addr{sheet: s2.sheet, col: s2.col + col_diff, row: s2.row + row_diff};
+        (OtherCommand::CopyRangeVals(s1.clone(), e1.clone(), s2.clone()), vec![ParentType::Range(s1, e1), ParentType::Range(s2, e2)])
+    },
+    "CopyRangeFormulas" Ws <s1: Addr> ":" <e1: Addr> Ws <s2: Addr> => 
+    {
+        let row_diff = e1.row - s1.row;
+        let col_diff = e1.col - s1.col;
+        let e2 = Addr{sheet: s2.sheet, col: s2.col + col_diff, row: s2.row + row_diff};
+        (OtherCommand::CopyRangeFormulae(s1.clone(), e1.clone(), s2.clone()), vec![ParentType::Range(s1, e1), ParentType::Range(s2, e2)])
+    },
+    "MakeChart" Ws <s1: Addr> ":" <e1: Addr> Ws <s2: Addr> ":" <e2:Addr> =>
+    {
+        (OtherCommand::MakeChart(s1.clone(), e1.clone(), s2.clone(), e2.clone()), vec![ParentType::Range(s1, e1), ParentType::Range(s2, e2)])
+    }
+} 
+
+
+Ws: () = {
+    "Ws" => ()
+}
+

@@ -1,0 +1,220 @@
+use crate::tokensexpr::{Token, LexicalError};
+use crate::ast::*;
+use crate::SheetStorage;
+use lalrpop_util::ParseError;
+grammar(curr_sheet: u32, sheetstore: &SheetStorage);
+
+
+extern {
+  type Location = usize;
+  type Error = LexicalError;
+
+  enum Token {
+    
+    "float" => Token::Float(<f64>),
+    "int" => Token::Integer(<i32>),
+    "bool" => Token::Bool(<bool>),
+    "str" => Token::Str(<String>),
+    "wildcard" => Token::Wildcard,
+
+    "localcell" => Token::LocalCell(<(u32, u32)>),
+    "globalcell" => Token::GlobalCell(<(String, u32, u32)>),
+
+    "Sum" => Token::Sum,
+    "Avg" => Token::Avg,
+    "Min" => Token::Min,
+    "Max" => Token::Max,
+    "Stdev" => Token::Stdev,
+    "Sleep" => Token::Sleep,
+    "Not" => Token::Not,
+
+    "isSubstr" => Token::IsSubstr,
+    "Round" => Token::Round,
+    "Count" => Token::Count,
+    "IfElse" => Token::IfElse,
+
+
+    "==" => Token::OperatorEq,
+    "!=" => Token::OperatorNotEq,
+
+    ">=" => Token::OperatorGtEq,
+    ">" => Token::OperatorGt,
+    "<=" => Token::OperatorLtEq,
+    "<" => Token::OperatorLt,
+    "&&" => Token::OperatorAnd,
+    "||" => Token::OperatorOr,
+
+
+    "**" => Token::OperatorPow,
+    "//" => Token::OperatorFloorDiv,
+
+    "(" => Token::LParen,
+    ")" => Token::RParen,
+    "=" => Token::Assign,
+    "+" => Token::OperatorAdd,
+    "-" => Token::OperatorSub,
+    "*" => Token::OperatorMul,
+    "/" => Token::OperatorDiv,
+    "%" => Token::OperatorMod,
+
+    "^" => Token::OperatorConcat,
+
+    ":" => Token::Colon,
+    "," => Token::Comma,
+
+  }
+}
+
+pub Assign: (Command, Vec<ParentType>) = {
+    <a: Addr> "=" <e_v: StartExpr> => {
+        let (e, v) = e_v;
+        (Command::AssignCmd(a, e), v)}, //Target Addr is not included in the address vector
+
+}
+
+StartExpr: (Box<Expr>, Vec<ParentType>) = {
+    EqExpr,
+}
+
+EqExpr: (Box<Expr>, Vec<ParentType>) = {   
+    <e1_v1: AndOrExpr> <o: EqOp> <e2_v2: AndOrExpr> => {   //Note here that EqOps cannot chain.
+    let ((e1, mut v1), (e2, mut v2)) = (e1_v1, e2_v2);
+    v1.append(&mut v2);
+    (Box::new(Expr::InfixOp(e1, o, e2)), v1)},  
+    AndOrExpr,
+};
+
+EqOp: InfixFunction = {
+    "==" => InfixFunction::Eq,
+    "!=" => InfixFunction::Neq,
+
+    ">=" => InfixFunction::GtEq,
+    ">" => InfixFunction::Gt,
+    "<=" => InfixFunction::LtEq,
+    "<" => InfixFunction::Lt,
+};
+
+
+AndOrExpr: (Box<Expr>, Vec<ParentType>) = { //Weakest binding
+    <e1_v1: AndOrExpr> <o: AndOrOp> <e2_v2: AddSubExpr> => { 
+    let ((e1, mut v1), (e2, mut v2)) = (e1_v1, e2_v2);
+    v1.append(&mut v2);
+    (Box::new(Expr::InfixOp(e1, o, e2)), v1)},  
+    AddSubExpr,
+};
+
+AndOrOp: InfixFunction = {
+    "&&" => InfixFunction::And,
+    "||" => InfixFunction::Or,
+};
+
+
+AddSubExpr: (Box<Expr>, Vec<ParentType>) = { // (1)
+    <e1_v1: AddSubExpr> <o: AddSubOp> <e2_v2: MulDivExpr> => { 
+    let ((e1, mut v1), (e2, mut v2)) = (e1_v1, e2_v2);
+    v1.append(&mut v2);
+    (Box::new(Expr::InfixOp(e1, o, e2)), v1)},  
+    MulDivExpr,
+};
+
+AddSubOp: InfixFunction = { 
+    "+" => InfixFunction::Add,
+    "-" => InfixFunction::Sub,
+};
+
+MulDivExpr: (Box<Expr>, Vec<ParentType>) = {
+    <f_v1: MulDivExpr> <o: MulDivOp> <a_v2: LastExpr> => { 
+    let ((f, mut v1), (a, mut v2)) = (f_v1, a_v2);
+    v1.append(&mut v2);
+    (Box::new(Expr::InfixOp(f, o, a)), v1)},  
+    LastExpr,
+};
+
+MulDivOp: InfixFunction = {
+    "*" => InfixFunction::Mul,
+    "/" => InfixFunction::Div,
+    "//" => InfixFunction::FloorDiv,
+    "%" => InfixFunction::Mod,
+};
+
+LastExpr: (Box<Expr>, Vec<ParentType>) = {
+    <f_v1: LastExpr> <o: LastOp> <a_v2: Atom> => { 
+    let ((f, mut v1), (a, mut v2)) = (f_v1, a_v2);
+    v1.append(&mut v2);
+    (Box::new(Expr::InfixOp(f, o, a)), v1)},  
+    Atom,
+};
+
+LastOp: InfixFunction = { //Tightest binding
+    "**" => InfixFunction::Pow,
+    "^" => InfixFunction::Concat,
+};
+
+Atom: (Box<Expr>, Vec<ParentType>) = {
+    "int" => (Box::new(Expr::Integer(<>)), vec![]),
+    "-" <i: "int"> => (Box::new(Expr::Integer(-i)), vec![]),
+    "float" => (Box::new(Expr::Float(<>)), vec![]),
+    "-" <f: "float"> => (Box::new(Expr::Float(-f)), vec![]),
+    "bool" => (Box::new(Expr::Bool(<>)), vec![]),
+    "str" => (Box::new(Expr::String(<>)), vec![]),
+    "wildcard" => (Box::new(Expr::Wildcard), vec![]),
+
+    <a: Addr> => (Box::new(Expr::Cell(a.clone())), vec![ParentType::Single(a)]),
+
+    <f: RangeFuncs> "(" <a1: Addr> ":" <a2: Addr> ")" => (Box::new(Expr::RangeOp{op: f, start: a1.clone(), end: a2.clone(), cond: Box::new(Expr::Bool(true))}), vec![ParentType::Range(a1, a2)]),
+    <f: RangeFuncs> "(" <a1: Addr> ":" <a2: Addr> "," <e_v: StartExpr> ")" => {let (e,mut v) = e_v; v.push(ParentType::Range(a1.clone(), a2.clone())); (Box::new(Expr::RangeOp{op: f, start: a1, end: a2, cond: e}), v)},
+
+    <f: MonoFuncs> "(" <e_v: StartExpr> ")" => {let (e, v) = e_v; (Box::new(Expr::MonoOp(f, e)), v)},
+
+    <f: BinaryFuncs> "(" <e1_v1: StartExpr> ","  <e2_v2: StartExpr> ")" => { 
+    let ((e1, mut v1), (e2, mut v2)) = (e1_v1, e2_v2);
+    v1.append(&mut v2);
+    (Box::new(Expr::BinOp(f, e1, e2)), v1)},
+
+    <f: TernaryFuncs> "(" <e1_v1: StartExpr> ","  <e2_v2: StartExpr> ","  <e3_v3: StartExpr> ")" => { 
+    let ((e1, mut v1), (e2, mut v2), (e3, mut v3)) = (e1_v1, e2_v2, e3_v3);
+    v1.append(&mut v2);
+    v1.append(&mut v3);
+    (Box::new(Expr::TernaryOp(f, e1, e2, e3)), v1)},
+
+
+    "(" <AndOrExpr> ")",
+};
+
+
+Addr: Addr = {
+    <cr: "localcell"> => { 
+        let (col, row) = cr;
+        Addr{sheet: curr_sheet, col, row} },  //NOTE: Why am I doing Box::new everywhere?. Also, how come tokens returns Option<_> but stufff is working?!?
+    <scr: "globalcell"> =>? { 
+        let (sheet, col, row) = scr;
+        let sheet_num_opt = sheetstore.num_from_name(&sheet);
+        if let Some(sheet_num) = sheet_num_opt {
+            Ok(Addr{sheet: sheet_num as u32, col, row}) 
+        }
+        else { Err(ParseError::User {error: LexicalError::SheetNotFoundErr(sheet) }) }
+        },  
+    
+}
+
+RangeFuncs: RangeFunction = {
+    "Sum" => RangeFunction::Sum,
+    "Avg" => RangeFunction::Avg,
+    "Min" => RangeFunction::Min,
+    "Max" => RangeFunction::Max,
+    "Stdev" => RangeFunction::Stdev,
+}
+
+MonoFuncs: MonoFunction = {
+    "Sleep" => MonoFunction::Sleep,
+    "Not" => MonoFunction::Not,
+}
+
+BinaryFuncs: BinaryFunction = {
+    "Round" => BinaryFunction::Round,
+    "isSubstr" => BinaryFunction::IsSubstr,
+}
+
+TernaryFuncs: TernaryFunction = {
+    "IfElse" => TernaryFunction::IfThenElse,
+}

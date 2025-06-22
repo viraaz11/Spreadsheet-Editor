@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "spreadsheet_core",
+    "cli",
+    "ext"
+]

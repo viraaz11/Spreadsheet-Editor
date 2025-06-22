@@ -1,0 +1,289 @@
+\documentclass{article}
+\usepackage{graphicx}
+\usepackage{listings}
+\usepackage{color}
+\usepackage{geometry}
+\usepackage{tikz}
+\usetikzlibrary{shapes.geometric, arrows}
+\geometry{margin=1in}
+
+\definecolor{dkgreen}{rgb}{0,0.6,0}
+\definecolor{gray}{rgb}{0.5,0.5,0.5}
+\definecolor{mauve}{rgb}{0.58,0,0.82}
+
+\lstset{frame=tb,
+  language=Rust,
+  aboveskip=3mm,
+  belowskip=3mm,
+  showstringspaces=false,
+  columns=flexible,
+  basicstyle={\small\ttfamily},
+  numbers=none,
+  numberstyle=\tiny\color{gray},
+  keywordstyle=\color{blue},
+  commentstyle=\color{dkgreen},
+  stringstyle=\color{mauve},
+  breaklines=true,
+  breakatwhitespace=true,
+  tabsize=3
+}
+
+\tikzstyle{startstop} = [rectangle, rounded corners, minimum width=3cm, minimum height=1cm,text centered, draw=black, fill=red!30]
+\tikzstyle{process} = [rectangle, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=blue!20]
+\tikzstyle{decision} = [diamond, minimum width=3cm, minimum height=1cm, text centered, draw=black, fill=yellow!20]
+\tikzstyle{arrow} = [thick,->,>=stealth]
+
+\title{COP290 Rust Lab}
+\author{Arjun Sammi: 2023CS50163; Popat Nihal Alkesh: 2023CS10058; Viraaj Narolia: 2023CS10552}
+\date{April 2025}
+
+\begin{document}
+
+\maketitle
+\section{Introduction}
+\subsection{How to use our TUI}
+In normal mode:
+
+\begin{itemize}
+    \item e: enter edit mode
+    \item w,a,s,d: move across spreadsheet
+    \item up and down arrow keys: scroll command history
+    \item left and right arrow keys: change spreadsheet
+    \item q: quit instance
+\end{itemize} \\
+In edit mode:
+\begin{itemize}
+    \item esc: enter normal mode
+    \item up and down arrow keys: autofill command from history
+\end{itemize}
+
+\section{Command Syntax Table}
+
+
+\begin{tabular}{|l|p{10cm}|}
+\hline
+\textbf{Command} & \textbf{Description} \\
+\hline
+\texttt{:q} & Quit the editor  \\
+\hline
+\texttt{:w} & Move cursor up  \\
+\texttt{:a} & Move cursor left  \\
+\texttt{:s} & Move cursor down  \\
+\texttt{:d} & Move cursor right  \\
+\texttt{:scroll\_to <cell>} & Scroll to bring \texttt{cell} into view  \\
+\texttt{:enable\_output} & (Does not apply, does nothing)  \\
+\texttt{:disable\_output} & (Does not apply, does nothing)  \\
+\hline
+\texttt{:copy\_cell\_value <src> <dst>} & Copy value from \texttt{src} to \texttt{dst} cell  \\
+\texttt{:copy\_cell\_formula <src> <dst>} & Copy formula from \texttt{src} to \texttt{dst} cell  \\
+\texttt{:copy\_range\_values <src\_start>:<src\_end> <dst\_start>} & Copy values from a range to a starting destination  \\
+\texttt{:copy\_range\_formulas <src\_start>:<src\_end> <dst\_start>} & Copy formulas from a range to a starting destination  \\
+\hline
+\texttt{:add\_sheet <name>} & Add a new sheet named \texttt{name}  \\
+\texttt{:remove\_sheet <name>} & Delete sheet named \texttt{name}  \\
+\texttt{:rename\_sheet <old> <new>} & Rename sheet \texttt{old} to \texttt{new}  \\
+\texttt{:dup\_sheet <source> <copy>} & Duplicate \texttt{source} into \texttt{copy}  \\
+\texttt{:resize <width> <height>} & Resize spreadsheet to dimensions \texttt{width} x \texttt{:height}  \\
+\hline
+\texttt{:load\_csv <sheet> <path>} & Load a CSV file at \texttt{path} into \texttt{sheet}  \\
+\texttt{:export\_csv <sheet> <path>} & Export \texttt{sheet} contents to a CSV at \texttt{path}  \\
+\hline
+\texttt{:undo} & Undo the last action  \\
+\texttt{:redo} & Redo the last undone action  \\
+\hline
+\texttt{:make\_chart <start>:<end>} & Create chart from selected range  \\
+\hline
+\texttt{autofill\_ap <start\_addr>:<end\_addr>} & Autofill arithmetic progression across range based on first two values  \\
+\texttt{autofill\_gp <start\_addr>:<end\_addr>} & Autofill geometric progression across range based on first two values  \\
+\hline
+\end{tabular}
+
+
+
+
+
+
+
+
+
+
+
+
+
+\section{Why proposed extension could not be implemented?}
+\subsection{Ability to add/delete individual rows/columns}
+We deliberately did not implement this, because according to our implementation, we would have to iterate through every cell of every sheet in order to add/remove a single row/column. This is because we are storing addresses of cells depending on the current cell in its struct. Implementing this would bloat the time complexity by a lot.
+
+\subsection{Relative and absolute addressing}
+This would have required parsing and converting expressions differently during evaluation, along with additional metadata for each cell reference. Due to time constraints and complications with expression parsing, this was skipped.
+
+\subsection{Non evaluated cell functions}
+We later believed this extension was not impressive enough to implement. Evaluating cells lazily would also introduce space complexity in dependency management.
+
+\subsection{Integrating ML models as formula}
+We lacked the time and resources to safely integrate ML models into our Rust-based formula engine, and the utility was limited in the current TUI setup.
+
+\subsection{Branching in undo-redo}
+This would require a tree-like structure to represent user state history. While we have basic undo-redo, supporting branching would add significant overhead and was not feasible within project constraints.
+
+\subsection{'help' and 'man' commands}
+Basic help is implemented, but comprehensive man-page style documentation is missing due to time constraints.
+
+\subsection{Advanced Find and Replace with regex}
+Regex integration was deprioritized because of time limits and since basic find/replace met user needs.
+
+\subsection{Labelling of ranges}
+This was deprioritized as it did not add much value for a terminal-based spreadsheet.
+
+\subsection{Macros}
+Too complex to implement safely in the time provided. Also posed risks of circular macro definitions and hard-to-debug states.
+
+\section{Could we implement extra extensions over and above the proposal?}
+
+Yes, we were able to implement 6 additional extensions:
+\begin{itemize}
+
+
+\item Conditional range functions
+
+
+\item Copy paste cell/range value/expression
+
+
+\item Graph
+
+\item Bool data type and its operations
+
+
+\item Command history
+
+
+\item TUI
+\end{itemize}
+
+Thus, out of 16 proposed extensions, we could implement 8, along with 6 extensions above and beyond the proposal.
+
+\section{Explanation of Implemented Extensions}
+
+\subsection{CSV Import and Export}
+We implemented support for importing spreadsheets from CSV files and exporting the current spreadsheet to CSV. This allows interoperability with other spreadsheet applications like Excel or Google Sheets.
+
+\subsection{Variable Size Spreadsheet}
+To optimize memory usage, we avoid pre-initializing every cell in the spreadsheet. Instead, cells are created only when accessed or assigned. Additionally, the spreadsheet can dynamically resize with user commands.
+
+\subsection{Multiple Sheets}
+Our system supports creating and managing multiple sheets. Users can add, delete, duplicate, and rename sheets. Each sheet maintains its own cells and formulas.
+
+\subsection{Global and Local Addressing}
+We support both global and local cell addressing. Global addresses can reference cells across sheets, while local addresses refer to cells in the current sheet context.
+
+\subsection{Autofill}
+Autofill is supported for arithmetic and geometric progressions. However, we could not implement relative autofill for expressions due to time constraints.
+
+\subsection{Complex Expressions}
+Our expression parser supports complex nested formulas, allowing the use of nested function calls, arithmetic, logic, and conditional operations in the same expression. This is powered by a lexer and parser which generates an ast.
+
+\subsection{Ternary Operator in Formula}
+We introduced a ternary operator (\texttt{cond ? expr1 : expr2}) for conditional expressions inside formulas, enhancing expressiveness and control.
+
+\subsection{Conditional Range Functions}
+Functions such as \texttt{SUMIF} and \texttt{COUNTIF} were implemented. These allow users to operate over a range based on conditional logic.
+
+\subsection{Formula Display Functionality}
+When a cell is selected, its formula or value is shown in a side panel, making it easier for users to understand the logic behind computed results.
+
+\subsection{Undo/Redo}
+Basic undo and redo functionality is implemented. Due to time constraints, only assignment-type commands can be undone and redone.
+
+\subsection{Graphing Support}
+We support basic graph rendering using ASCII. Currently, only scatter plots are available, due to limited time for implementing more chart types.
+
+\subsection{Copy-Paste (Cell and Range)}
+Users can copy and paste both individual cells and ranges. The system preserves whether the pasted content is a value or a formula. During copy-paste, local references shift appropriately, while global references remain unchanged.
+
+\subsection{Data Types}
+The spreadsheet supports multiple data types including integers, floats, strings, and booleans. Type-aware functions are provided to operate on each data type.
+
+\subsection{Command History}
+Users can navigate through previously entered commands using the arrow keys, making interaction efficient and smooth.
+
+\subsection{Command-Line Graphical UI (CLGUI)}
+A terminal-based user interface was implemented using \texttt{crossterm} and \texttt{tui-rs}. The interface mimics a VIM-like interactive spreadsheet environment.
+
+
+
+\section{Primary data structures}
+\subsection{BTreeSet}
+Used to store cells that depend on the current cell. It is used for topological sorting, which gives order of evaluating cells on every update.
+
+\subsection{Hash Table}
+Hash table is used to store visited cells and detect cyclic dependency in the DFS algorithm used for topological sort.
+
+\subsection{Stack}
+Stack is used to store the order of cells returned by DFS.
+
+\section{Interfaces between software modules}
+Our project was divided into several modules with clear interfaces:
+
+\begin{itemize}
+    \item \textbf{ast.rs}: Abstract Syntax Tree definitions for expressions.
+    \item \textbf{cell\_operations.rs}: Struct implementations of cell, column, and sheet.
+    \item \textbf{evaluate\_operations.rs}: Functions to evaluate parsed expressions.
+    \item \textbf{grammarcmds.lalrpop}, \textbf{tokenscmds.rs}: Parser for spreadsheet commands.
+    \item \textbf{grammarexpr.lalrpop}, \textbf{tokensexpr.rs}: Expression grammar and token definitions.
+    \item \textbf{graphic\_interface.rs}: Code for rendering ASCII graphs and charts.
+    \item \textbf{lexer.rs}: Tokenizes input commands and expressions.
+    \item \textbf{main.rs}: Main file that connects all modules and initializes the program.
+\end{itemize}
+
+These modules interact via well-defined structures and function calls, ensuring modularity and maintainability.
+
+% \section{Flowchart of Our Spreadsheet Workflow}
+% \begin{center}
+% \begin{tikzpicture}[node distance=1.8cm and 2cm]
+
+% % Nodes
+% \node (start) [startstop] {Start};
+% \node (input) [process, below of=start] {User Input};
+% \node (lex) [process, below of=input] {Tokenize Input (lexer.rs)};
+% \node (parsecmd) [process, below of=lex] {Parse Command (grammarcmds.lalrpop)};
+% \node (parseexpr) [process, below of=parsecmd] {Parse Expressions (grammarexpr.lalrpop)};
+% \node (ast) [process, below of=parseexpr] {Build AST (ast.rs)};
+% \node (eval) [process, below of=ast] {Evaluate Expression (evaluate\_operations.rs)};
+% \node (error) [decision, right of=eval, xshift=5cm] {Error occurred?};
+% \node (update) [process, below of=eval] {Update Cell/Sheet (cell\_operations.rs)};
+% \node (render) [process, below of=update] {Render Graph (graphic\_interface.rs)};
+% \node (quit) [decision, below of=render] {User wants to quit?};
+% \node (end) [startstop, below of=quit] {End};
+
+% % Arrows (only vertical or horizontal, no slants)
+% \draw [arrow] (start) -- (input);
+% \draw [arrow] (input) -- (lex);
+% \draw [arrow] (lex) -- (parsecmd);
+% \draw [arrow] (parsecmd) -- (parseexpr);
+% \draw [arrow] (parseexpr) -- (ast);
+% \draw [arrow] (ast) -- (eval);
+% \draw [arrow] (eval.east) -- (error.west);
+
+% \draw [arrow] (error.south) -- ++(0,-1) -- ++(-5,0) |- (input.west) node[midway, above left] {Yes};
+
+% \draw [arrow] (error.south) -- ++(0,-1.5) -- ++(-5,0) |- (update.east) node[midway, below right] {No};
+
+% \draw [arrow] (update) -- (render);
+% \draw [arrow] (render) -- (quit);
+
+% \draw [arrow] (quit.south) -- (end);
+% \draw [arrow] (quit.west) -- ++(-4,0) -- ++(0,10.3) -- (input.west) node[midway, left] {No};
+
+% \end{tikzpicture}
+% \end{center}
+
+
+
+
+
+
+\section{Conclusion}
+We designed and implemented a modular, feature-rich spreadsheet application in Rust, with a clean TUI, a functional parser and evaluator, and a powerful expression system. Despite time and complexity constraints, we successfully implemented most of the core features and several advanced ones. The system was tested and verified for accuracy and performance. Future work could include GUI integration, improved memory handling, and collaborative editing features.
+
+\end{document}
